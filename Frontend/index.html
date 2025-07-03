@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Live Audio Stream</title>
+  <style>
+    /*
+    body{
+      background-color: black;
+      color: white;
+    }
+    button{
+      background-color: Black;
+      color: white;
+    }
+      */
+  </style>
+</head>
+<body>
+  <h2>Live Audio Recorder</h2>
+  <button id="start">Start</button>
+  <button id="stop">Stop</button>
+
+  <script>
+    let mediaRecorder, socket;
+    
+    function initRecorder() {
+      //Requests access to users microphone
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          console.log('Mic access granted');
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+
+          // When audio chunk available 
+          mediaRecorder.ondataavailable = e => {
+            if (e.data && e.data.size > 0 && socket.readyState === WebSocket.OPEN) {
+              console.log('📤 Sending chunk', e.data.size, 'bytes');
+              // sends chunk to server
+              socket.send(e.data);
+            }
+          };
+          
+          mediaRecorder.onstart = () => console.log('🔴 Recording started');
+          mediaRecorder.onstop  = () => console.log('⏹️ Recording stopped');
+
+          mediaRecorder.start(500); // chunk every 500ms
+        })
+        .catch(err => console.error('⚠️ getUserMedia failed:', err));
+    }
+    
+    // Event to handle start button 
+    document.getElementById('start').onclick = async () => {
+      console.log('▶️  Starting…');
+
+      // Creating web socket 
+      socket = new WebSocket("ws://127.0.0.1:8000/ws/stream/");
+
+      socket.onopen = () => {
+        console.log('🟢 WS opened, requesting mic…');
+        // calling custom function to handle recording
+        initRecorder();
+      };
+      socket.onerror = e => console.error('WS error', e);
+      socket.onclose = () => console.log('WS closed');
+    };
+
+    // Event to handle stop button 
+    document.getElementById('stop').onclick = () => {
+      console.log('⏹️  Stopping…');
+      mediaRecorder?.stop();
+      socket?.close();
+    };
+  </script>
+</body>
+</html>
